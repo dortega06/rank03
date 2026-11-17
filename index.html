@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Buscador con Fotos - SerpApi</title>
+  <style>
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+    body { margin: 0; padding: 20px; background: #f4f6f9; color: #1e293b; }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { font-size: 1.5rem; margin-bottom: 16px; text-align: center; }
+    .search-box { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+    input[type="text"] {
+      flex: 1; min-width: 200px; padding: 12px 14px; border: 1px solid #cbd5e1;
+      border-radius: 8px; font-size: 1rem;
+    }
+    select, button {
+      padding: 12px 16px; border-radius: 8px; font-size: 1rem; border: 1px solid #cbd5e1;
+    }
+    button {
+      background: #2563eb; color: #fff; border: none; cursor: pointer; font-weight: 600;
+    }
+    button:hover { background: #1d4ed8; }
+    .status { text-align: center; margin: 16px 0; color: #475569; }
+    .error { background: #fee2e2; color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
+    .section-title { font-size: 1.1rem; font-weight: 700; margin: 20px 0 12px; }
+    .photos-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px; margin-bottom: 24px;
+    }
+    .photo-card {
+      background: #fff; border-radius: 8px; overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-decoration: none; color: inherit;
+      display: flex; flex-direction: column;
+    }
+    .photo-card img { width: 100%; height: 140px; object-fit: cover; background: #e2e8f0; }
+    .photo-card span {
+      padding: 8px; font-size: 0.82rem; display: -webkit-box;
+      -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .result-card {
+      background: #fff; padding: 14px; border-radius: 8px; margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: flex; gap: 14px; align-items: flex-start;
+    }
+    .result-thumb {
+      width: 90px; height: 90px; object-fit: cover; border-radius: 6px; flex-shrink: 0;
+    }
+    .result-content a {
+      color: #1d4ed8; font-weight: 600; font-size: 1.05rem; text-decoration: none;
+    }
+    .result-content a:hover { text-decoration: underline; }
+    .result-url { font-size: 0.8rem; color: #16a34a; margin: 4px 0; word-break: break-all; }
+    .result-snippet { font-size: 0.9rem; color: #475569; margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Buscador Web y de Fotos</h1>
+
+    <div class="search-box">
+      <input type="text" id="queryInput" placeholder="Escribe lo que quieres buscar..." />
+      <select id="engineSelect">
+        <option value="google">Web + Fotos</option>
+        <option value="google_images">Solo Imágenes</option>
+      </select>
+      <button onclick="buscar()">Buscar</button>
+    </div>
+
+    <div id="status" class="status"></div>
+    <div id="errorBox" class="error" style="display:none;"></div>
+    <div id="photosSection"></div>
+    <div id="resultsSection"></div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // PEGA AQUÍ TU NUEVA API KEY REGENERADA DE SERPAPI (ENTRE LAS COMILLAS)
+    // =========================================================================
+    const API_KEY = "6be04aeb5616b28da18f918ac96417ca7a446f864f060edb605bbe757d2d426c";
+
+    document.getElementById("queryInput").addEventListener("keypress", function (e) {
+      if (e.key === "Enter") buscar();
+    });
+
+    async function buscar() {
+      const query = document.getElementById("queryInput").value.trim();
+      const engine = document.getElementById("engineSelect").value;
+      const status = document.getElementById("status");
+      const errorBox = document.getElementById("errorBox");
+      const photosSection = document.getElementById("photosSection");
+      const resultsSection = document.getElementById("resultsSection");
+
+      errorBox.style.display = "none";
+      photosSection.innerHTML = "";
+      resultsSection.innerHTML = "";
+
+      if (!query) {
+        status.textContent = "Escribe un término para buscar.";
+        return;
+      }
+
+      if (!API_KEY || API_KEY === "PEGA_AQUI_TU_NUEVA_CLAVE") {
+        errorBox.textContent = "Falta colocar tu API Key de SerpApi dentro de la etiqueta <script> del archivo index.html.";
+        errorBox.style.display = "block";
+        return;
+      }
+
+      status.textContent = "Buscando resultados y fotos...";
+
+      const url = `https://serpapi.com/search.json?engine=${engine}&q=${encodeURIComponent(query)}&hl=es&gl=es&api_key=${encodeURIComponent(API_KEY)}`;
+
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.error) {
+          throw new Error(data.error);
+        }
+
+        status.textContent = "";
+
+        // 1. Mostrar galería de fotos (inline_images en búsqueda web o images_results en imágenes)
+        const fotos = engine === "google_images" ? (data.images_results || []) : (data.inline_images || []);
+        if (fotos.length > 0) {
+          let fotosHTML = `<div class="section-title">Fotos encontradas</div><div class="photos-grid">`;
+          fotos.slice(0, 12).forEach(foto => {
+            const imgSrc = foto.thumbnail || foto.original || "";
+            const linkHref = foto.link || foto.original || "#";
+            const titulo = foto.title || "Ver imagen";
+            if (imgSrc) {
+              fotosHTML += `
+                <a class="photo-card" href="${linkHref}" target="_blank" rel="noopener noreferrer">
+                  <img src="${imgSrc}" alt="${titulo.replace(/"/g, '&quot;')}" loading="lazy" onerror="this.style.display='none'" />
+                  <span>${titulo}</span>
+                </a>
+              `;
+            }
+          });
+          fotosHTML += `</div>`;
+          photosSection.innerHTML = fotosHTML;
+        }
+
+        // 2. Mostrar resultados web (con miniatura si tienen foto)
+        const resultados = data.organic_results || [];
+        if (resultados.length > 0) {
+          let webHTML = `<div class="section-title">Resultados web</div>`;
+          resultados.forEach(item => {
+            const thumbHTML = item.thumbnail
+              ? `<img class="result-thumb" src="${item.thumbnail}" alt="" loading="lazy" onerror="this.style.display='none'" />`
+              : "";
+            webHTML += `
+              <div class="result-card">
+                ${thumbHTML}
+                <div class="result-content">
+                  <a href="${item.link}" target="_blank" rel="noopener noreferrer">${item.title}</a>
+                  <div class="result-url">${item.link}</div>
+                  <p class="result-snippet">${item.snippet || ""}</p>
+                </div>
+              </div>
+            `;
+          });
+          resultsSection.innerHTML = webHTML;
+        }
+
+        if (fotos.length === 0 && resultados.length === 0) {
+          status.textContent = "No se encontraron resultados ni fotos para esta búsqueda.";
+        }
+      } catch (err) {
+        status.textContent = "";
+        errorBox.innerHTML = `<strong>Error al conectar con SerpApi:</strong> ${err.message}.<br>
+        <small>Nota: Si abres este archivo directamente desde tu carpeta local, el navegador puede bloquear la conexión por seguridad (CORS). Para evitarlo, ábrelo con un servidor local (como <em>Live Server</em>) o mediante un backend.</small>`;
+        errorBox.style.display = "block";
+      }
+    }
+  </script>
+</body>
+</html>
